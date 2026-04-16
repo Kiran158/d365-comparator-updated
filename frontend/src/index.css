@@ -1,0 +1,87 @@
+/* frontend/src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0d0f14;
+  --surface: #13161d;
+  --surface-2: #1a1e28;
+  --surface-3: #212637;
+  --border: #2a2f42;
+  --border-bright: #363d55;
+  --text: #e8eaf0;
+  --text-muted: #7b82a0;
+  --text-dim: #4a5070;
+  --accent: #4f8ef7;
+  --accent-dim: #2a4a8a;
+  --accent-glow: rgba(79, 142, 247, 0.15);
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.1);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.1);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.1);
+  --partial: #a78bfa;
+  --partial-bg: rgba(167, 139, 250, 0.1);
+  --font: 'DM Sans', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+button { font-family: var(--font); cursor: pointer; }
+input, select { font-family: var(--font); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.badge-matched { background: var(--success-bg); color: var(--success); }
+.badge-different { background: var(--warning-bg); color: var(--warning); }
+.badge-partial { background: var(--partial-bg); color: var(--partial); }
+.badge-missing { background: var(--danger-bg); color: var(--danger); }
+.badge-draft { background: var(--surface-3); color: var(--text-muted); }
+.badge-validated { background: var(--success-bg); color: var(--success); }
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-bright);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeIn 0.25s ease forwards; }
