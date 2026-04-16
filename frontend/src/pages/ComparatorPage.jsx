@@ -289,7 +289,7 @@ export default function ComparatorPage() {
             <CredentialsUpload
               onCredentialsUpdated={(sessionId) => {
                 if (sessionId) {
-                  // Credentials updated, component will reload via effect
+                  // Credentials updated, component will reload via effect with datebase on sessionId change
                   checkCredentials();
                 }
               }}
