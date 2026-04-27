@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 
 import TemplateSidebar from '../components/TemplateSidebar';
-import LegalEntityPicker from '../components/LegalEntityPicker';
+import SourceEntityPicker from '../components/SourceEntityPicker';
+import DestinationEntityPicker from '../components/DestinationEntityPicker';
 import EntityList from '../components/EntityList';
 import ComparisonTable from '../components/ComparisonTable';
 import SummaryCards from '../components/SummaryCards';
@@ -38,7 +39,8 @@ export default function ComparatorPage() {
 
   // Selection state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [selectedLegalEntities, setSelectedLegalEntities] = useState([]);
+  const [selectedSourceEntity, setSelectedSourceEntity] = useState(null);
+  const [selectedDestinationEntities, setSelectedDestinationEntities] = useState([]);
   const [selectedEntities, setSelectedEntities] = useState([]);
 
   // UI state
@@ -150,8 +152,9 @@ export default function ComparatorPage() {
 
   async function handleRunComparison() {
     if (!selectedTemplate) return toast.error('Please select a template');
-    if (selectedLegalEntities.length < 2)
-      return toast.error('Please select at least 2 legal entities');
+    if (!selectedSourceEntity) return toast.error('Please select a source legal entity');
+    if (selectedDestinationEntities.length === 0)
+      return toast.error('Please select at least one destination legal entity');
     if (selectedEntities.length === 0)
       return toast.error('Please select at least one entity to compare');
 
@@ -163,12 +166,17 @@ export default function ComparatorPage() {
     try {
       const res = await runComparison({
         templateId: selectedTemplate.TemplateId,
-        legalEntities: selectedLegalEntities,
+        sourceEntity: selectedSourceEntity,
+        destinationEntities: selectedDestinationEntities,
         entities: selectedEntities,
       });
       setComparisonSummary(res.summary);
       setComparisonResults(res.results);
-      toast.success(`Comparison complete — ${res.summary.entityCount} entities analysed`);
+      const missingCount = res.summary.missingInAllDestinations || 0;
+      const coverageMsg = missingCount > 0 
+        ? `Found ${missingCount} records from source missing in all destinations`
+        : 'All source records found in destinations';
+      toast.success(`Comparison complete — ${res.summary.entityCount} entities analysed · ${coverageMsg}`);
     } catch (e) {
       toast.error(`Comparison failed: ${e.message}`);
       setConfigOpen(true);
@@ -183,7 +191,8 @@ export default function ComparatorPage() {
     try {
       await exportComparison({
         comparisonData: comparisonResults,
-        legalEntities: selectedLegalEntities,
+        sourceEntity: selectedSourceEntity,
+        destinationEntities: selectedDestinationEntities,
         templateId: selectedTemplate?.TemplateId,
       });
       toast.success('Export downloaded');
@@ -196,7 +205,8 @@ export default function ComparatorPage() {
 
   const canRun =
     selectedTemplate &&
-    selectedLegalEntities.length >= 2 &&
+    selectedSourceEntity &&
+    selectedDestinationEntities.length > 0 &&
     selectedEntities.length > 0 &&
     !running;
 
@@ -405,8 +415,8 @@ export default function ComparatorPage() {
                     <span style={{ color: 'var(--accent)' }}>
                       {selectedTemplate.TemplateId}
                     </span>
-                    {selectedLegalEntities.length >= 2 &&
-                      ` · ${selectedLegalEntities.join(' vs ')}`}
+                    {selectedSourceEntity && selectedDestinationEntities.length > 0 &&
+                      ` · ${selectedSourceEntity} → ${selectedDestinationEntities.join(', ')}`}
                     {selectedEntities.length > 0 &&
                       ` · ${selectedEntities.length} entities`}
                   </>
@@ -427,20 +437,30 @@ export default function ComparatorPage() {
                 )}
 
                 <div style={styles.configGrid}>
-                  <LegalEntityPicker
+                  <SourceEntityPicker
                     entities={legalEntities}
-                    selected={selectedLegalEntities}
-                    onChange={setSelectedLegalEntities}
+                    selected={selectedSourceEntity}
+                    onChange={setSelectedSourceEntity}
                     loading={loadingLegalEntities}
                   />
 
+                  <DestinationEntityPicker
+                    entities={legalEntities}
+                    selected={selectedDestinationEntities}
+                    onChange={setSelectedDestinationEntities}
+                    loading={loadingLegalEntities}
+                    excludeEntity={selectedSourceEntity}
+                  />
+
                   {selectedTemplate && (
-                    <EntityList
-                      entities={templateEntities}
-                      selectedEntities={selectedEntities}
-                      onToggle={setSelectedEntities}
-                      loading={loadingTemplateEntities}
-                    />
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <EntityList
+                        entities={templateEntities}
+                        selectedEntities={selectedEntities}
+                        onToggle={setSelectedEntities}
+                        loading={loadingTemplateEntities}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -452,8 +472,8 @@ export default function ComparatorPage() {
             <div style={styles.runningBanner}>
               <div className="spinner" />
               <span>
-                Comparing data across{' '}
-                <strong>{selectedLegalEntities.join(', ')}</strong> for{' '}
+                Comparing <strong>{selectedSourceEntity}</strong> against{' '}
+                <strong>{selectedDestinationEntities.join(', ')}</strong> for{' '}
                 <strong>{selectedEntities.length}</strong> entities…
               </span>
             </div>
@@ -479,7 +499,7 @@ export default function ComparatorPage() {
                   key={entityName}
                   entityName={entityName}
                   result={result}
-                  legalEntities={selectedLegalEntities}
+                  legalEntities={[selectedSourceEntity, ...selectedDestinationEntities]}
                 />
               ))}
             </div>
@@ -591,7 +611,7 @@ const styles = {
   },
   configToggleLabel: { display: 'flex', alignItems: 'center', gap: 6 },
   configBody: { padding: 16 },
-  configGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 },
+  configGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, gridAutoFlow: 'row' },
   noTemplateBanner: {
     display: 'flex',
     alignItems: 'center',

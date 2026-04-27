@@ -261,6 +261,124 @@ function compareEntityData(entityResults, keyField = null) {
   return comparison;
 }
 
+/**
+ * One-directional comparison: Source → Destinations
+ * Checks which records from the source entity are NOT present in ANY destination entity
+ * 
+ * @param {Array} entityResults - Array where first item is source, rest are destinations
+ *   Format: { legalEntityId, records: [...], count, error }
+ * @param {String} keyField - Optional specific field to use as key
+ * @returns {Object} Comparison result with source-only records
+ */
+function compareSourceToDestinations(entityResults, keyField = null) {
+  if (entityResults.length === 0) {
+    return { summary: {}, rows: [] };
+  }
+
+  const sourceResult = entityResults[0];
+  const destinationResults = entityResults.slice(1);
+  const sourceEntityId = sourceResult.legalEntityId;
+  const destinationEntityIds = destinationResults.map((r) => r.legalEntityId);
+
+  // Build map of destination records for quick lookup
+  const destinationRecordMap = {};
+  for (const result of destinationResults) {
+    for (const record of result.records) {
+      const key = keyField
+        ? record[keyField]
+        : Object.entries(record)
+            .filter(
+              ([k]) =>
+                !['dataAreaId', '@odata.etag', 'modifiedDateTime', 'createdDateTime'].includes(k)
+            )
+            .slice(0, 3)
+            .map(([, v]) => v)
+            .join('|');
+
+      if (!destinationRecordMap[key]) {
+        destinationRecordMap[key] = [];
+      }
+      destinationRecordMap[key].push({
+        legalEntityId: result.legalEntityId,
+        record,
+      });
+    }
+  }
+
+  const comparison = {
+    summary: {
+      totalSourceRecords: sourceResult.records.length,
+      foundInAllDestinations: 0,
+      missingInAllDestinations: 0,
+      missingInSomeDestinations: 0,
+    },
+    rows: [],
+  };
+
+  // Check each source record
+  for (const sourceRecord of sourceResult.records) {
+    const key = keyField
+      ? sourceRecord[keyField]
+      : Object.entries(sourceRecord)
+          .filter(
+            ([k]) =>
+              !['dataAreaId', '@odata.etag', 'modifiedDateTime', 'createdDateTime'].includes(k)
+          )
+          .slice(0, 3)
+          .map(([, v]) => v)
+          .join('|');
+
+    const destinationsWithRecord = destinationRecordMap[key] || [];
+    const foundInDestinationIds = [...new Set(destinationsWithRecord.map((d) => d.legalEntityId))];
+    const missingInDestinationIds = destinationEntityIds.filter((d) => !foundInDestinationIds.includes(d));
+
+    let status = 'present_all';
+    if (missingInDestinationIds.length === destinationEntityIds.length) {
+      status = 'missing_all';
+      comparison.summary.missingInAllDestinations++;
+    } else if (missingInDestinationIds.length > 0) {
+      status = 'missing_some';
+      comparison.summary.missingInSomeDestinations++;
+    } else {
+      comparison.summary.foundInAllDestinations++;
+    }
+
+    // Build field differences if found in destinations
+    let fieldDiffs = {};
+    if (destinationsWithRecord.length > 0) {
+      for (const field of Object.keys(sourceRecord)) {
+        if (['dataAreaId', '@odata.etag'].includes(field)) continue;
+        const sourceValue = sourceRecord[field];
+        const destValues = {};
+        destinationsWithRecord.forEach((d) => {
+          destValues[d.legalEntityId] = d.record[field];
+        });
+        const normalizedSourceValue = normalizeValue(sourceValue);
+        const allSame = Object.values(destValues)
+          .map(normalizeValue)
+          .every((v) => v === normalizedSourceValue);
+        if (!allSame) {
+          fieldDiffs[field] = destValues;
+        }
+      }
+    }
+
+    comparison.rows.push({
+      key,
+      status,
+      sourceRecord,
+      foundInDestinations: foundInDestinationIds,
+      missingInDestinations: missingInDestinationIds,
+      destinationRecords: Object.fromEntries(
+        destinationsWithRecord.map((d) => [d.legalEntityId, d.record])
+      ),
+      fieldDiffs,
+    });
+  }
+
+  return comparison;
+}
+
 module.exports = {
   getTemplates,
   getTemplateById,
@@ -268,4 +386,5 @@ module.exports = {
   getLegalEntities,
   getEntityData,
   compareEntityData,
+  compareSourceToDestinations,
 };

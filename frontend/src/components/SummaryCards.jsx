@@ -16,17 +16,29 @@ export default function SummaryCards({ summary, results }) {
   if (!summary) return null;
 
   const entityResults = Object.values(results || {});
-  const avgMatch =
-    entityResults.length > 0
-      ? Math.round(
-          entityResults.reduce((acc, r) => acc + (r.comparison?.summary?.matchPercent || 0), 0) /
-            entityResults.length
-        )
-      : 0;
+  
+  // Calculate coverage: how many source records are found in at least some destination
+  const totalSourceRecords = entityResults.reduce(
+    (acc, r) => acc + (r.comparison?.summary?.totalSourceRecords || 0),
+    0
+  );
+  const foundInAllDests = entityResults.reduce(
+    (acc, r) => acc + (r.comparison?.summary?.foundInAllDestinations || 0),
+    0
+  );
+  const missingInAllDests = entityResults.reduce(
+    (acc, r) => acc + (r.comparison?.summary?.missingInAllDestinations || 0),
+    0
+  );
+  const missingInSomeDests = entityResults.reduce(
+    (acc, r) => acc + (r.comparison?.summary?.missingInSomeDestinations || 0),
+    0
+  );
 
-  const totalMatched = entityResults.reduce((acc, r) => acc + (r.comparison?.summary?.matched || 0), 0);
-  const totalDiff = entityResults.reduce((acc, r) => acc + (r.comparison?.summary?.hasDifferences || 0), 0);
-  const totalMissing = entityResults.reduce((acc, r) => acc + (r.comparison?.summary?.missingInSome || 0), 0);
+  const coveragePercent =
+    totalSourceRecords > 0
+      ? Math.round(((totalSourceRecords - missingInAllDests) / totalSourceRecords) * 100)
+      : 100;
 
   return (
     <div style={styles.wrap}>
@@ -34,7 +46,7 @@ export default function SummaryCards({ summary, results }) {
         <GitCompare size={16} color="var(--accent)" />
         <span style={styles.title}>Comparison Summary</span>
         <span style={styles.meta}>
-          {summary.legalEntities?.join(' vs ')} · {new Date(summary.timestamp).toLocaleString()}
+          {summary.sourceEntity} → {summary.destinationEntities?.join(', ')} · {new Date(summary.timestamp).toLocaleString()}
         </span>
       </div>
 
@@ -47,38 +59,40 @@ export default function SummaryCards({ summary, results }) {
         />
         <StatCard
           icon={<CheckCircle2 size={22} />}
-          label="Matched Records"
-          value={totalMatched.toLocaleString()}
+          label="Source Records in All Destinations"
+          value={foundInAllDests.toLocaleString()}
           color="var(--success)"
         />
         <StatCard
           icon={<AlertTriangle size={22} />}
-          label="Records with Differences"
-          value={totalDiff.toLocaleString()}
+          label="Missing in Some Destinations"
+          value={missingInSomeDests.toLocaleString()}
           color="var(--warning)"
         />
         <StatCard
           icon={<XCircle size={22} />}
-          label="Missing Records"
-          value={totalMissing.toLocaleString()}
+          label="Missing in All Destinations"
+          value={missingInAllDests.toLocaleString()}
           color="var(--danger)"
         />
         <StatCard
           icon={
             <span style={{ fontSize: 22, fontWeight: 700, fontFamily: 'var(--mono)' }}>
-              {avgMatch}%
+              {coveragePercent}%
             </span>
           }
-          label="Avg. Match Rate"
+          label="Data Coverage"
           value=""
-          color={avgMatch >= 90 ? 'var(--success)' : avgMatch >= 70 ? 'var(--warning)' : 'var(--danger)'}
+          color={coveragePercent >= 90 ? 'var(--success)' : coveragePercent >= 70 ? 'var(--warning)' : 'var(--danger)'}
         />
       </div>
 
       {/* Per-entity summary */}
       <div style={styles.entityGrid}>
         {entityResults.map((r) => {
-          const pct = r.comparison?.summary?.matchPercent ?? 0;
+          const total = r.comparison?.summary?.totalSourceRecords || 0;
+          const found = r.comparison?.summary?.foundInAllDestinations || 0;
+          const pct = total > 0 ? Math.round((found / total) * 100) : 100;
           const color =
             pct === 100 ? 'var(--success)' : pct >= 80 ? 'var(--warning)' : 'var(--danger)';
           return (

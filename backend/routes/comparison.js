@@ -4,7 +4,7 @@ const router = express.Router();
 const {
   getTemplateEntities,
   getEntityData,
-  compareEntityData,
+  compareSourceToDestinations,
 } = require('../services/d365Service');
 const { buildComparisonExcel } = require('../services/exportService');
 const { getPublicCollectionName } = require('../services/entityMappingService');
@@ -12,23 +12,35 @@ const logger = require('../services/loggerService');
 
 /**
  * POST /api/comparison/run
- * Body: { templateId: string, legalEntities: string[], entities?: string[] }
+ * Body: { templateId: string, sourceEntity: string, destinationEntities: string[], entities?: string[] }
  *
- * Runs a full comparison across all entities in the template
- * for the selected legal entities.
+ * Runs a full comparison between source and destination legal entities
+ * for the selected entities in the template.
  */
 router.post('/run', async (req, res) => {
-  const { templateId, legalEntities, entities: selectedEntities } = req.body;
+  const { templateId, sourceEntity, destinationEntities, entities: selectedEntities } = req.body;
 
   if (!templateId) {
     return res.status(400).json({ success: false, error: 'templateId is required' });
   }
-  if (!legalEntities || legalEntities.length < 2) {
+  if (!sourceEntity) {
+    return res.status(400).json({ success: false, error: 'sourceEntity is required' });
+  }
+  if (!destinationEntities || destinationEntities.length === 0) {
     return res.status(400).json({
       success: false,
-      error: 'At least 2 legal entities are required for comparison',
+      error: 'At least one destination entity is required for comparison',
     });
   }
+  if (destinationEntities.includes(sourceEntity)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Source entity cannot be in the destination entities list',
+    });
+  }
+
+  // Combine source and destination entities for comparison
+  const legalEntities = [sourceEntity, ...destinationEntities];
 
   try {
     // Fetch template entities
@@ -46,7 +58,7 @@ router.post('/run', async (req, res) => {
     }
 
     logger.info(
-      `Running comparison: template=${templateId}, entities=${templateEntities.length}, legalEntities=${legalEntities.join(',')}`
+      `Running comparison: template=${templateId}, source=${sourceEntity}, destinations=${destinationEntities.join(',')}, entities=${templateEntities.length}`
     );
 
     const results = {};
@@ -63,8 +75,8 @@ router.post('/run', async (req, res) => {
       );
       const entityResults = await Promise.all(entityFetches);
 
-      // Run comparison
-      const comparison = compareEntityData(entityResults);
+      // Run one-directional comparison (source → destinations)
+      const comparison = compareSourceToDestinations(entityResults);
 
       results[entityName] = {
         entityName,
@@ -84,18 +96,25 @@ router.post('/run', async (req, res) => {
     // Build overall summary
     const overallSummary = {
       templateId,
-      legalEntities,
+      sourceEntity,
+      destinationEntities,
       entityCount: templateEntities.length,
-      totalRecordsCompared: Object.values(results).reduce(
-        (acc, r) => acc + (r.comparison?.summary?.totalUniqueKeys || 0),
+      totalSourceRecords: Object.values(results).reduce(
+        (acc, r) => acc + (r.comparison?.summary?.totalSourceRecords || 0),
         0
       ),
-      fullyMatched: Object.values(results).filter(
-        (r) => r.comparison?.summary?.matchPercent === 100
-      ).length,
-      hasIssues: Object.values(results).filter(
-        (r) => (r.comparison?.summary?.matchPercent || 0) < 100
-      ).length,
+      foundInAllDestinations: Object.values(results).reduce(
+        (acc, r) => acc + (r.comparison?.summary?.foundInAllDestinations || 0),
+        0
+      ),
+      missingInAllDestinations: Object.values(results).reduce(
+        (acc, r) => acc + (r.comparison?.summary?.missingInAllDestinations || 0),
+        0
+      ),
+      missingInSomeDestinations: Object.values(results).reduce(
+        (acc, r) => acc + (r.comparison?.summary?.missingInSomeDestinations || 0),
+        0
+      ),
       timestamp: new Date().toISOString(),
     };
 
@@ -108,16 +127,19 @@ router.post('/run', async (req, res) => {
 
 /**
  * POST /api/comparison/export
- * Body: { comparisonData: object, legalEntities: string[], templateId: string }
+ * Body: { comparisonData: object, sourceEntity: string, destinationEntities: string[], templateId: string }
  *
  * Exports comparison result to Excel
  */
 router.post('/export', async (req, res) => {
-  const { comparisonData, legalEntities, templateId } = req.body;
+  const { comparisonData, sourceEntity, destinationEntities, templateId } = req.body;
 
-  if (!comparisonData || !legalEntities) {
-    return res.status(400).json({ success: false, error: 'comparisonData and legalEntities are required' });
+  if (!comparisonData || !sourceEntity || !destinationEntities) {
+    return res.status(400).json({ success: false, error: 'comparisonData, sourceEntity, and destinationEntities are required' });
   }
+
+  // Combine for export
+  const legalEntities = [sourceEntity, ...destinationEntities];
 
   try {
     const buffer = buildComparisonExcel(comparisonData, legalEntities);
