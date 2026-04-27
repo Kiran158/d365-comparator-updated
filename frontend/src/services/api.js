@@ -10,6 +10,16 @@ const api = axios.create({
 });
 
 // ── Interceptors ──────────────────────────────────────────────────────────────
+
+// Attach session ID to every request so backend can find stored credentials
+api.interceptors.request.use((config) => {
+  const sessionId = localStorage.getItem('d365-session-id');
+  if (sessionId) {
+    config.headers['X-Session-Id'] = sessionId;
+  }
+  return config;
+});
+
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
@@ -29,9 +39,13 @@ export const fetchLegalEntities = () => api.get('/legal-entities');
 export const runComparison = (payload) => api.post('/comparison/run', payload);
 
 export const exportComparison = async (payload) => {
+  const sessionId = localStorage.getItem('d365-session-id');
   const response = await axios.post(`${BASE}/api/comparison/export`, payload, {
     responseType: 'blob',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(sessionId ? { 'X-Session-Id': sessionId } : {}),
+    },
   });
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
