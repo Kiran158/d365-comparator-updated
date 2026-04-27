@@ -1,22 +1,15 @@
 // frontend/src/services/api.js
 import axios from 'axios';
 
+const BASE = process.env.REACT_APP_API_URL || '';
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${BASE}/api`,
   headers: { 'Content-Type': 'application/json' },
   timeout: 60000,
 });
 
 // ── Interceptors ──────────────────────────────────────────────────────────────
-// Add session ID to requests
-api.interceptors.request.use((config) => {
-  const sessionId = localStorage.getItem('d365-session-id');
-  if (sessionId) {
-    config.headers['X-Session-Id'] = sessionId;
-  }
-  return config;
-});
-
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
@@ -36,17 +29,9 @@ export const fetchLegalEntities = () => api.get('/legal-entities');
 export const runComparison = (payload) => api.post('/comparison/run', payload);
 
 export const exportComparison = async (payload) => {
-  const sessionId = localStorage.getItem('d365-session-id');
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (sessionId) {
-    headers['X-Session-Id'] = sessionId;
-  }
-
-  const response = await axios.post('/api/comparison/export', payload, {
+  const response = await axios.post(`${BASE}/api/comparison/export`, payload, {
     responseType: 'blob',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
   });
   const url = window.URL.createObjectURL(new Blob([response.data]));
   const link = document.createElement('a');
