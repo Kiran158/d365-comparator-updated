@@ -25,6 +25,8 @@ import {
   fetchLegalEntities,
   runComparison,
   exportComparison,
+  checkCredentialsStatus,
+  clearSessionId,
 } from '../services/api';
 
 export default function ComparatorPage() {
@@ -77,25 +79,16 @@ export default function ComparatorPage() {
         return;
       }
 
-      // Verify session is still valid
-      const response = await fetch('/api/config/credentials-status', {
-        headers: { 'X-Session-Id': sessionId },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.hasCustomCredentials) {
-          setHasCustomCredentials(true);
-        } else {
-          setHasCustomCredentials(false);
-        }
+      const data = await checkCredentialsStatus();
+      if (data.hasCustomCredentials) {
+        setHasCustomCredentials(true);
       } else {
-        // Session expired or invalid
-        localStorage.removeItem('d365-session-id');
+        clearSessionId();
         setHasCustomCredentials(false);
       }
     } catch (error) {
       console.error('Error checking credentials:', error);
+      clearSessionId();
       setHasCustomCredentials(false);
     } finally {
       setCredentialsLoaded(true);
